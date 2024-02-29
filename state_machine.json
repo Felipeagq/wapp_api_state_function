@@ -1,0 +1,170 @@
+{
+    "Comment": "Step Function para manejar IDs de usuario de WhatsApp y procesamiento de mensajes",
+    "StartAt": "Trigger",
+    "States": {
+      "Trigger": {
+        "Type": "Task",
+        "Resource": "arn:aws:lambda:us-east-2:315068324448:function:waba_Trigger",
+        "Next": "GetEventType",
+        "ResultPath": "$.msg"
+      },
+      "GetEventType": {
+        "Type": "Choice",
+        "Choices": [
+          {
+            "Variable": "$.msg.type",
+            "StringEquals": "message",
+            "Next": "ReceiveMessage"
+          },
+          {
+            "Variable": "$.msg.type",
+            "StringEquals": "status",
+            "Next": "HandleConfirmation"
+          },
+          {
+            "Variable": "$.msg.type",
+            "StringEquals": "flow_completion",
+            "Next": "FlowEndpoint"
+          },
+          {
+            "Variable": "$.msg.type",
+            "StringEquals": "encrypted_flow_data",
+            "Next": "FlowEndpoint"
+          }
+        ],
+        "Default": "HandleNotification"
+      },
+      "HandleConfirmation": {
+        "Type": "Task",
+        "Resource": "arn:aws:lambda:us-east-2:315068324448:function:waba_HandleConfirmation",
+        "End": true
+      },
+      "HandleNotification": {
+        "Type": "Task",
+        "Resource": "arn:aws:lambda:us-east-2:315068324448:function:HandleNotificacion",
+        "End": true
+      },
+      "FlowEndpoint": {
+        "Type": "Task",
+        "Resource": "arn:aws:lambda:us-east-2:315068324448:function:waba_FlowEndpoint",
+        "End": true
+      },
+      "ReceiveMessage": {
+        "Type": "Task",
+        "Resource": "arn:aws:lambda:us-east-2:315068324448:function:waba_ProcessMessage",
+        "Next": "ValidateUser",
+        "ResultPath": "$.msg"
+      },
+      "ValidateUser": {
+        "Type": "Task",
+        "Resource": "arn:aws:lambda:us-east-2:315068324448:function:waba_CheckUserIDExists",
+        "Parameters": {
+          "msg.$": "$.msg.data"
+        },
+        "ResultPath": "$.user",
+        "Next": "CheckUser"
+      },
+      "CheckUser": {
+        "Type": "Choice",
+        "Choices": [
+          {
+            "Variable": "$.user.userExists",
+            "BooleanEquals": true,
+            "Next": "UpdateUser"
+          },
+          {
+            "Variable": "$.user.userExists",
+            "BooleanEquals": false,
+            "Next": "CreateNewUser"
+          }
+        ],
+        "Default": "ErrorState"
+      },
+      "UpdateUser": {
+        "Type": "Task",
+        "Resource": "arn:aws:lambda:us-east-2:315068324448:function:waba_ProcessExistingUser",
+        "Parameters": {
+          "msg.$": "$.msg.data"
+        },
+        "Next": "GetMessageType",
+        "ResultPath": "$.openai"
+      },
+      "CreateNewUser": {
+        "Type": "Task",
+        "Resource": "arn:aws:lambda:us-east-2:315068324448:function:waba_AddNewUserID",
+        "Parameters": {
+          "msg.$": "$.msg.data"
+        },
+        "Next": "GetMessageType",
+        "ResultPath": "$.openai"
+      },
+      "GetMessageType": {
+        "Type": "Choice",
+        "Choices": [
+          {
+            "Variable": "$.msg.data.type",
+            "StringEquals": "text",
+            "Next": "HandleText"
+          },
+          {
+            "Variable": "$.msg.data.type",
+            "StringEquals": "audio",
+            "Next": "HandleAudio"
+          },
+          {
+            "Variable": "$.msg.data.type",
+            "StringEquals": "image",
+            "Next": "HandleMedia"
+          },
+          {
+            "Variable": "$.msg.data.type",
+            "StringEquals": "document",
+            "Next": "HandleDocument"
+          }
+        ],
+        "Default": "MessageTypeNotSupported"
+      },
+      "HandleText": {
+        "Type": "Task",
+        "Resource": "arn:aws:lambda:us-east-2:315068324448:function:waba_ProcessTextMessage",
+        "Parameters": {
+          "msg.$": "$.msg.data"
+        },
+        "End": true
+      },
+      "HandleAudio": {
+        "Type": "Task",
+        "Resource": "arn:aws:lambda:us-east-2:315068324448:function:waba_ProcessAudioMessage",
+        "Parameters": {
+          "msg.$": "$.msg.data"
+        },
+        "End": true
+      },
+      "HandleMedia": {
+        "Type": "Task",
+        "Resource": "arn:aws:lambda:us-east-2:315068324448:function:waba_ProcessVideoMessage",
+        "Parameters": {
+          "msg.$": "$.msg.data"
+        },
+        "End": true
+      },
+      "HandleDocument": {
+        "Type": "Task",
+        "Resource": "arn:aws:lambda:us-east-2:315068324448:function:waba_ProcessDocumentMessage",
+        "Parameters": {
+          "msg.$": "$.msg.data"
+        },
+        "End": true
+      },
+      "MessageTypeNotSupported": {
+        "Type": "Fail",
+        "Error": "MessageTypeNotSupported",
+        "Cause": "El tipo de mensaje no es soportado."
+      },
+      "ErrorState": {
+        "Type": "Fail",
+        "Error": "ErrorInProcess",
+        "Cause": "Se encontró un error en el procesamiento."
+      }
+    }
+  }
